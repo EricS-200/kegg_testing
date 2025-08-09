@@ -1,0 +1,2 @@
+class InvalidAtomMappings(Exception):
+    pass
