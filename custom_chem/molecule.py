@@ -6,21 +6,9 @@ import io
 import re
 import md_harmonize.tools as mdh_tools
 from typing import NamedTuple
-
+from .atom import Atom
+from .bond import Bond
 from .exceptions import *
-
-class Atom(NamedTuple):
-    mapping_num: int
-    symbol: str
-    charge: int = 0
-
-    def __eq__(self, other):
-        return self.mapping_num == other.mapping_num and self.symbol == other.symbol
-
-    def __hash__(self):
-        return hash((self.mapping_num, self.symbol))
-
-Bond = collections.namedtuple("Bond", ["other_atom", "type"])
 
 class Molecule:
     def __init__(self,
@@ -45,8 +33,8 @@ class Molecule:
     def get_graph(rdkit_mol: Chem.rdchem.Mol) -> dict[Atom: list[Bond]]:
         graph = {}
         for atom in rdkit_mol.GetAtoms():
-            graph[Atom(atom.GetAtomMapNum(), atom.GetSymbol(), atom.GetFormalCharge())] = sorted(
-                [Bond(Atom(bond.GetOtherAtom(atom).GetAtomMapNum(), bond.GetOtherAtom(atom).GetSymbol(), bond.GetOtherAtom(atom).GetFormalCharge()), str(bond.GetBondType())) for bond in atom.GetBonds()],
+            graph[Atom(mapping_num=atom.GetAtomMapNum(), symbol=atom.GetSymbol(), charge=atom.GetFormalCharge())] = sorted(
+                [Bond(Atom(mapping_num=bond.GetOtherAtom(atom).GetAtomMapNum(), symbol=bond.GetOtherAtom(atom).GetSymbol(), charge=bond.GetOtherAtom(atom).GetFormalCharge()), str(bond.GetBondType())) for bond in atom.GetBonds()],
                 key=lambda bond: bond.other_atom.mapping_num)
         return graph
 
@@ -71,14 +59,14 @@ class Molecule:
             m = re.fullmatch(r'#(?:(\d+)?([+-]))', s.strip())
             if not m:
                 return 0
-            mag = int(m.group(1) or '1')  # missing magnitude means 1
+            mag = int(m.group(1) or '1')
             sign = 1 if m.group(2) == '+' else -1
             return sign * mag
 
         for line in kcf["ATOM"][1:]:
             items = line.split()
             charge_state = kcf_charge_to_int(items[5] if len(items) >= 6 else "")
-            atom = Atom(mapping_num=int(items[0]), symbol=items[2], charge=charge_state)
+            atom = Atom(mapping_num=int(items[0]), symbol=items[2], kegg_atom_type=items[1], charge=charge_state)
             graph[atom] = []
 
         for line in kcf["BOND"][1:]:
@@ -94,8 +82,20 @@ class Molecule:
 
         return Molecule(graph=graph, rdkit_mol=Molecule.to_rdkit_from_graph(graph))
 
+    def mark_aromaticity(self):
+        rdkit_mol = Molecule.to_rdkit_from_graph(self.graph)
+        to_change = {frozenset({bond.GetBeginAtom().GetAtomMapNum(), bond.GetEndAtom().GetAtomMapNum()})
+                                        for bond in rdkit_mol.GetBonds()
+                                        if bond.GetIsAromatic()}
+
+        for atom, bonds in self._graph.items():
+            for bond in bonds:
+                if frozenset({atom.mapping_num, bond.other_atom.mapping_num}) in to_change:
+                    bond.type = str(Chem.rdchem.BondType.AROMATIC)
+
+
     @staticmethod
-    def to_rdkit_from_graph(graph):
+    def to_rdkit_from_graph(graph) -> Chem.rdchem.Mol:
         def get_bond_type(code):
             s = str(code).lower()
             if s in ("1", "single"):  return Chem.rdchem.BondType.SINGLE
@@ -175,14 +175,14 @@ class Molecule:
 
         new_graph = {}
         for old_atom, old_bonds in self.graph.items():
-            new_atom = Atom(mapping_num=nums_dict.get(old_atom.mapping_num, old_atom.mapping_num), symbol=old_atom.symbol, charge=old_atom.charge)
+            new_atom = Atom(mapping_num=nums_dict.get(old_atom.mapping_num, old_atom.mapping_num), symbol=old_atom.symbol, kegg_atom_type=old_atom.kegg_atom_type, charge=old_atom.charge)
             new_bonds = []
             for old_bond in old_bonds:
                 other_atom = old_bond.other_atom
-                new_bond = Bond(other_atom=Atom(mapping_num=nums_dict.get(other_atom.mapping_num, other_atom.mapping_num), symbol=other_atom.symbol, charge=other_atom.charge),
+                new_bond = Bond(other_atom=Atom(mapping_num=nums_dict.get(other_atom.mapping_num, other_atom.mapping_num), symbol=other_atom.symbol, kegg_atom_type=other_atom.kegg_atom_type, charge=other_atom.charge),
                                 type=old_bond.type)
                 new_bonds.append(new_bond)
-            new_graph[new_atom] = sorted(new_bonds)
+            new_graph[new_atom] = sorted(new_bonds, key=lambda b: b.other_atom.mapping_num)
 
         self.graph = new_graph
         self._rdkit_mol = Molecule.to_rdkit_from_graph(self.graph)

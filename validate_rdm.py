@@ -20,8 +20,8 @@ def test_reaction(rid: str, atom_mappings: dict[int: int], kcf_path: str, true_c
 
     mol2.update_atom_map_num(mapping_num_changes)
 
-    mol1 = Molecule.from_rdkit_mol(Molecule.to_rdkit_from_graph(mol1.graph))
-    mol2 = Molecule.from_rdkit_mol(Molecule.to_rdkit_from_graph(mol2.graph))
+    mol1.mark_aromaticity()
+    mol2.mark_aromaticity()
 
     rxn = Reaction(mol1, mol2)
     reaction_centers, _, _ = rxn.get_rdm()

@@ -2,7 +2,9 @@ from __future__ import annotations
 import PIL
 import collections
 
-from .molecule import Atom, Bond, Molecule
+from .atom import Atom
+from .bond import Bond
+from .molecule import Molecule
 
 class Reaction:  # Custom reaction class to use custom Molecule.
     def __init__(self,
@@ -76,6 +78,11 @@ class Reaction:  # Custom reaction class to use custom Molecule.
                 d.append(atom)
 
         to_remove_r = set()
+
+        # for atom in r:
+        #     if atom.kegg_atom_type == get_atom_by_num(atom.mapping_num, combined_products_graph).kegg_atom_type:
+        #         to_remove_r.add(atom)
+
         visited = set()
         has_difference_atom = set()
         # === algorithm 1
