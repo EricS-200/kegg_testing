@@ -101,6 +101,7 @@ class Molecule:
             if s in ("1", "single"):  return Chem.rdchem.BondType.SINGLE
             if s in ("2", "double"):  return Chem.rdchem.BondType.DOUBLE
             if s in ("3", "triple"):  return Chem.rdchem.BondType.TRIPLE
+            if s in ("1.5", "aromatic"): return Chem.rdchem.BondType.AROMATIC
 
         rw = Chem.RWMol()
         atom_to_idx = {}
